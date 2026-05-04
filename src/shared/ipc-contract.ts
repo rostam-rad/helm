@@ -19,7 +19,11 @@ export interface IpcRequest {
   'sessions:watch':   { req: { id: string };  res: { ok: true } };
   'sessions:unwatch': { req: { id: string };  res: { ok: true } };
   'settings:get':     { req: void; res: AppSettings };
-  'settings:set':     { req: Partial<AppSettings>; res: AppSettings };
+  // req is `unknown` because validation lives in the main process
+  // (see src/main/store/settings.ts). The renderer can still pass a
+  // Partial<AppSettings>-shaped object — it just gets validated on
+  // arrival rather than typechecked away from the boundary.
+  'settings:set':     { req: unknown; res: AppSettings };
   'adapters:list':    { req: void; res: { id: AdapterId; displayName: string; enabled: boolean }[] };
 }
 

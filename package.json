@@ -19,6 +19,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
     "better-sqlite3": "^11.3.0",
     "chokidar": "^4.0.1",
     "clsx": "^2.1.1",

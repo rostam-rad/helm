@@ -23,6 +23,7 @@ export function SessionsView() {
   const setQuery = useSessionsStore(s => s.setSearchQuery);
   const select = useSessionsStore(s => s.select);
   const setView = useSessionsStore(s => s.setView);
+  const openTab = useSessionsStore(s => s.openTab);
   const loaded = useSessionsStore(s => s.loaded);
 
   const filtered = useMemo(() => applyFilter(sessions, filter, query), [sessions, filter, query]);
@@ -50,6 +51,7 @@ export function SessionsView() {
   }, []);
 
   function openSession(id: string) {
+    openTab(id);
     select(id);
     setView('detail');
   }

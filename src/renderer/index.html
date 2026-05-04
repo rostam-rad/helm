@@ -3,26 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Helm</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
-      rel="stylesheet"
+    <!--
+      Strict CSP: PRD §7.3 promises zero outbound network traffic by default.
+      Fonts are vendored via @fontsource (imported in main.tsx). 'unsafe-inline'
+      is on style-src because Tailwind injects inline <style> tags at runtime —
+      CSP cannot block that without breaking Tailwind. It is NOT on script-src,
+      because that would defeat the point of having a CSP at all (XSS).
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; connect-src 'self'; img-src 'self' data:;"
     />
-    <script>
-      // Set data-theme before React mounts to avoid a flash.
-      (function () {
-        try {
-          var stored = localStorage.getItem('helm.theme');
-          var mode = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
-          var dark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-        } catch (_) {
-          document.documentElement.setAttribute('data-theme', 'light');
-        }
-      })();
-    </script>
+    <title>Helm</title>
+    <!-- Sets data-theme synchronously before the React bundle to avoid a flash. -->
+    <script src="./theme-bootstrap.js"></script>
   </head>
   <body>
     <div id="root"></div>

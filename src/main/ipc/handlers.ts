@@ -16,6 +16,7 @@ import { settingsStore } from '../store/settings';
 import { readTailMessages, extractTailMeta } from '../adapters/claude-code/lister';
 import { StateTracker } from '../state/tracker';
 import { classifyModel } from '../../shared/model-classification';
+import { assertObject, assertSessionId } from './validate';
 import type { SessionMeta, Message, SessionState } from '../../shared/types';
 
 type GetWindow = () => BrowserWindow | null;
@@ -80,6 +81,18 @@ function startMetaWatcher(sessions: SessionMeta[], getWindow: GetWindow): void {
   metaWatcher.on('change', (filePath: string) => {
     const sessionId = fileToId.get(filePath);
     if (!sessionId) return;
+
+    // Skip re-seed for sessions with an active per-session watcher: that
+    // watcher's tracker.ingest calls are authoritative and incremental.
+    // Re-seeding here would truncate message history outside the 64KB tail
+    // and could briefly mis-classify a working session as awaiting-user.
+    //
+    // When the user closes the detail view (sessions:unwatch fires), we do
+    // NOT eagerly re-seed — the next file write will trigger this handler
+    // normally and refresh state. If no write comes, no refresh is needed:
+    // nothing has changed.
+    if (activeWatchers.has(sessionId)) return;
+
     const meta = sessionIndex.get(sessionId);
     if (!meta) return;
 
@@ -174,7 +187,9 @@ export function registerIpcHandlers(getWindow: GetWindow): void {
     return all;
   });
 
-  ipcMain.handle('sessions:get', async (_e, { id }: { id: string }) => {
+  ipcMain.handle('sessions:get', async (_e, payload: unknown) => {
+    const obj = assertObject(payload, 'sessions:get payload');
+    const id = assertSessionId(obj['id']);
     const meta = sessionIndex.get(id);
     if (!meta) throw new Error(`Unknown session: ${id}`);
     const adapter = getAdapter(meta.adapter);
@@ -221,7 +236,9 @@ export function registerIpcHandlers(getWindow: GetWindow): void {
     return { meta: enrichedMeta, messages };
   });
 
-  ipcMain.handle('sessions:watch', async (_e, { id }: { id: string }) => {
+  ipcMain.handle('sessions:watch', async (_e, payload: unknown) => {
+    const obj = assertObject(payload, 'sessions:watch payload');
+    const id = assertSessionId(obj['id']);
     if (activeWatchers.has(id)) return { ok: true as const };
 
     const meta = sessionIndex.get(id);
@@ -240,7 +257,9 @@ export function registerIpcHandlers(getWindow: GetWindow): void {
     return { ok: true as const };
   });
 
-  ipcMain.handle('sessions:unwatch', async (_e, { id }: { id: string }) => {
+  ipcMain.handle('sessions:unwatch', async (_e, payload: unknown) => {
+    const obj = assertObject(payload, 'sessions:unwatch payload');
+    const id = assertSessionId(obj['id']);
     const stop = activeWatchers.get(id);
     if (stop) {
       stop();
@@ -251,7 +270,9 @@ export function registerIpcHandlers(getWindow: GetWindow): void {
 
   ipcMain.handle('settings:get', async () => settingsStore.get());
 
-  ipcMain.handle('settings:set', async (_e, patch) => {
+  ipcMain.handle('settings:set', async (_e, patch: unknown) => {
+    // settingsStore.update is the validation boundary: it whitelists keys,
+    // validates types, and rejects non-object payloads. No destructure here.
     return settingsStore.update(patch);
   });
 

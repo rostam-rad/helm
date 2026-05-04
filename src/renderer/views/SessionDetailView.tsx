@@ -19,6 +19,14 @@ export function SessionDetailView() {
   const selectedId = useSessionsStore(s => s.selectedId);
   const select = useSessionsStore(s => s.select);
   const setView = useSessionsStore(s => s.setView);
+  const openTab = useSessionsStore(s => s.openTab);
+
+  // Pin into the tab strip whenever the user navigates to a session
+  // (from the rail, arrow keys, or auto-select on first load).
+  function selectAndPin(id: string) {
+    openTab(id);
+    select(id);
+  }
 
   const session = useMemo(() => sessions.find(s => s.id === selectedId) ?? null, [sessions, selectedId]);
 
@@ -26,9 +34,10 @@ export function SessionDetailView() {
   useEffect(() => {
     if (!selectedId && sessions.length > 0) {
       const first = sessions[0];
-      if (first) select(first.id);
+      if (first) selectAndPin(first.id);
     }
-  }, [selectedId, sessions, select]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, sessions]);
 
   // Esc returns to grid.
   useEffect(() => {
@@ -51,7 +60,7 @@ export function SessionDetailView() {
 
   return (
     <div className="flex h-full">
-      {railOpen && <SessionRail sessions={sessions} selectedId={session.id} onSelect={select} />}
+      {railOpen && <SessionRail sessions={sessions} selectedId={session.id} onSelect={selectAndPin} />}
       <DetailPane session={session} railOpen={railOpen} onToggleRail={() => setRailOpen(o => !o)} />
     </div>
   );

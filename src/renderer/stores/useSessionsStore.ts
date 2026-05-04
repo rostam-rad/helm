@@ -18,6 +18,8 @@ interface SessionsState {
   filter: FilterId;
   searchQuery: string;
   loaded: boolean;
+  /** Ordered list of session IDs the user has opened as tabs (Postman-style). */
+  openTabs: string[];
 
   // Actions
   load: () => Promise<void>;
@@ -26,6 +28,8 @@ interface SessionsState {
   setFilter: (filter: FilterId) => void;
   setSearchQuery: (q: string) => void;
   updateMeta: (meta: SessionMeta) => void;
+  openTab: (id: string) => void;
+  closeTab: (id: string) => void;
 }
 
 let subscribed = false;
@@ -37,6 +41,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   filter: 'all',
   searchQuery: '',
   loaded: false,
+  openTabs: [],
 
   async load() {
     if (!window.helm) return;
@@ -66,6 +71,30 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   setFilter(filter) { set({ filter }); },
   setSearchQuery(searchQuery) { set({ searchQuery }); },
   updateMeta(meta) { set(state => ({ sessions: { ...state.sessions, [meta.id]: meta } })); },
+
+  openTab(id) {
+    set(state => state.openTabs.includes(id)
+      ? state
+      : { openTabs: [...state.openTabs, id] });
+  },
+
+  closeTab(id) {
+    set(state => {
+      const idx = state.openTabs.indexOf(id);
+      if (idx === -1) return state;
+      const nextTabs = state.openTabs.filter(t => t !== id);
+      // If we just closed the active tab, fall back to a neighbor
+      // (prefer the tab to the right, then the left). If no tabs remain,
+      // drop selection and bounce back to the grid.
+      if (state.selectedId !== id) return { openTabs: nextTabs };
+      const fallback = nextTabs[idx] ?? nextTabs[idx - 1] ?? null;
+      return {
+        openTabs: nextTabs,
+        selectedId: fallback,
+        view: fallback ? state.view : 'sessions',
+      };
+    });
+  },
 }));
 
 // ----- selectors (called outside the store to keep state shape lean) -----

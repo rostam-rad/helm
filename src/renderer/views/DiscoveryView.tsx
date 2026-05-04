@@ -3,7 +3,7 @@ import clsx from 'clsx';
 import { useDiscoveryStore, type ProbeRow } from '../stores/useDiscoveryStore';
 import { useSessionsStore } from '../stores/useSessionsStore';
 import { AdapterMark } from '../components/atoms';
-import { HelmMark } from '../components/CompassMark';
+import { HelmAsciiBackground } from '../components/HelmAsciiBackground';
 
 export function DiscoveryView() {
   const rows = useDiscoveryStore(s => s.rows);
@@ -22,46 +22,70 @@ export function DiscoveryView() {
     { title: 'No supported coding agents found', sub: 'Helm searched common paths but didn\'t find any sessions. Add a custom path or skip to demo data.' };
 
   return (
-    <div className="flex h-full items-start justify-center overflow-y-auto bg-bg-2 p-8">
-      <div className="w-full max-w-[620px] rounded-md border border-rule bg-bg p-8 shadow-card">
-        <div className="flex flex-col items-center text-center">
-          <HelmMark size={64} />
-          <h1 className="mt-4 text-2xl font-semibold tracking-head2">{headerCopy.title}</h1>
-          <p className="mt-1 text-sm text-fg-3">{headerCopy.sub}</p>
-        </div>
+    <div className="relative h-full overflow-hidden bg-bg-2">
+      <HelmAsciiBackground />
 
-        <ul className="mt-6 divide-y divide-rule rounded-sm border border-rule">
-          {rows.map(r => <ProbeListItem key={r.adapter} row={r} />)}
-        </ul>
-
-        <div className="mt-6 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 text-xs">
-            <button className="text-accent hover:underline">Add a custom path…</button>
-            <button className="text-fg-3 hover:text-fg">Search my computer</button>
-          </div>
-          <div className="flex items-center gap-2">
-            {found.length === 0 && !scanning ? (
-              <button
-                onClick={() => setView('sessions')}
-                className="rounded-sm border border-rule px-3 py-1.5 text-xs font-medium text-fg-3 hover:text-fg"
-              >
-                Skip — show demo data
-              </button>
-            ) : (
-              <button
-                onClick={() => setView('sessions')}
-                disabled={scanning}
-                className={clsx(
-                  'rounded-sm px-3 py-1.5 text-xs font-medium',
-                  scanning
-                    ? 'bg-bg-3 text-fg-4 cursor-not-allowed'
-                    : 'bg-accent text-bg hover:opacity-90',
-                )}
-              >
-                Open dashboard →
-              </button>
+      {/* Left-anchored content column. Asymmetry prevents the modal and the
+          wheel from fighting for the same focal point. */}
+      <div className="relative flex h-full items-center overflow-y-auto px-[clamp(24px,8vw,120px)] py-12">
+        <div className="w-full max-w-[520px]">
+          {/* Wordmark + ambient status. Establishes "this is Helm" before
+              the user reads any copy below. */}
+          <div className="mb-6 flex items-center gap-2 font-mono text-2xs tracking-caps text-fg-4">
+            <span className="text-accent">◐</span>
+            <span>HELM · LOCAL DISCOVERY</span>
+            {scanning && (
+              <span className="ml-2 inline-flex items-center gap-1.5 text-fg-3">
+                <Spinner />
+                <span>scanning</span>
+              </span>
             )}
           </div>
+
+          <div className="rounded-md border border-rule bg-bg/95 p-7 shadow-card backdrop-blur-sm">
+            <h1 className="text-[26px] font-semibold leading-tight tracking-head2">
+              {headerCopy.title}
+            </h1>
+            <p className="mt-2 text-sm text-fg-3">{headerCopy.sub}</p>
+
+            <ul className="mt-5 divide-y divide-rule rounded-sm border border-rule">
+              {rows.map(r => <ProbeListItem key={r.adapter} row={r} />)}
+            </ul>
+
+            <div className="mt-5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 text-xs">
+                <button className="text-accent hover:underline">Add a custom path…</button>
+                <button className="text-fg-3 hover:text-fg">Search my computer</button>
+              </div>
+              <div className="flex items-center gap-2">
+                {found.length === 0 && !scanning ? (
+                  <button
+                    onClick={() => setView('sessions')}
+                    className="rounded-sm border border-rule px-3 py-1.5 text-xs font-medium text-fg-3 hover:text-fg"
+                  >
+                    Skip — show demo data
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setView('sessions')}
+                    disabled={scanning}
+                    className={clsx(
+                      'rounded-sm px-3 py-1.5 text-xs font-medium',
+                      scanning
+                        ? 'bg-bg-3 text-fg-4 cursor-not-allowed'
+                        : 'bg-accent text-bg hover:opacity-90',
+                    )}
+                  >
+                    Open dashboard →
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <p className="mt-4 font-mono text-2xs tracking-caps text-fg-4">
+            nothing leaves your machine
+          </p>
         </div>
       </div>
     </div>
