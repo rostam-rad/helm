@@ -40,7 +40,7 @@ export async function runDiscovery(enabledAdapters: AdapterId[]): Promise<Discov
         out.push({ adapter: adapter.id, path, result });
       } catch (err) {
         log.warn(`[discovery] ${adapter.id} validatePath(${path}) threw`, err);
-        out.push({ adapter: adapter.id, path, result: { ok: false, reason: 'Validation error' } });
+        out.push({ adapter: adapter.id, path, result: { ok: false, reason: 'unknown' } });
       }
     }
   }

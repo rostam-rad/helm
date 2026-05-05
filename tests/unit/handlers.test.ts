@@ -129,3 +129,136 @@ describe('metaWatcher early-return invariant', () => {
     expect(src).toContain('if (activeWatchers.has(sessionId)) return;');
   });
 });
+
+/**
+ * sessions:get must surface the LATEST model used in a session, not the
+ * first one. The original handler had a `!model` guard that froze the
+ * displayed model on the first assistant-text — wrong for any session
+ * where the user swapped models mid-conversation. This guards against
+ * that regression returning.
+ *
+ * Two checks:
+ *  1. Source tripwire — the buggy guard pattern must not reappear.
+ *  2. Behavior check — replicate the handler's reduction loop inline
+ *     against a two-model fixture and confirm the latest model wins.
+ */
+describe('sessions:get model resolution', () => {
+  it('handlers.ts no longer contains the first-write-wins !model guard', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const src = fs.readFileSync(
+      path.resolve(__dirname, '../../src/main/ipc/handlers.ts'),
+      'utf-8',
+    );
+    // The original buggy line — must not reappear.
+    expect(src).not.toContain("m.kind === 'assistant-text' && m.model && !model");
+    // Positive form must be present.
+    expect(src).toContain("if (m.kind === 'assistant-text' && m.model) model = m.model;");
+  });
+
+  it('latest assistant-text model wins across a multi-model session', async () => {
+    type Msg = { kind: string; model?: string | null };
+    const messages: Msg[] = [
+      { kind: 'user-prompt' },
+      { kind: 'assistant-text', model: 'claude-sonnet-4-5' },
+      { kind: 'tool-call' },
+      { kind: 'tool-result' },
+      { kind: 'user-prompt' },
+      // User swapped models mid-session.
+      { kind: 'assistant-text', model: 'claude-opus-4-7' },
+    ];
+
+    // Replicates the loop in handlers.ts:209-214 (sessions:get).
+    let model: string | null = null;
+    for (const m of messages) {
+      if (m.kind === 'assistant-text' && m.model) model = m.model;
+    }
+    expect(model).toBe('claude-opus-4-7');
+  });
+
+  it('keeps the seed value when no assistant-text carries a model', () => {
+    type Msg = { kind: string; model?: string | null };
+    const messages: Msg[] = [
+      { kind: 'user-prompt' },
+      { kind: 'assistant-text', model: null },
+      { kind: 'assistant-text' },
+    ];
+
+    let model: string | null = 'seed-from-meta';
+    for (const m of messages) {
+      if (m.kind === 'assistant-text' && m.model) model = m.model;
+    }
+    expect(model).toBe('seed-from-meta');
+  });
+});
+
+/**
+ * sessions:list must evict cached entries (sessionIndex, tracker, active
+ * watchers) for sessions that no longer appear in fresh discovery
+ * results — otherwise long-running Helm processes accumulate per-session
+ * state for files deleted from disk (audit #10).
+ *
+ * Source-tripwire + algorithm replication, same pattern as the model and
+ * metaWatcher invariants — the actual handler is bound to electron's
+ * ipcMain so a full integration test would require heavy mocking.
+ */
+describe('sessions:list eviction', () => {
+  it('handlers.ts contains the eviction loop', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const src = fs.readFileSync(
+      path.resolve(__dirname, '../../src/main/ipc/handlers.ts'),
+      'utf-8',
+    );
+    expect(src).toContain('const freshIds = new Set(all.map(s => s.id));');
+    expect(src).toContain('sessionIndex.delete(cachedId);');
+    expect(src).toContain('tracker.forget(cachedId);');
+  });
+
+  it('removes cached entries that are no longer present in fresh results', () => {
+    const sessionIndex = new Map<string, { id: string }>();
+    const trackerForgotten: string[] = [];
+    const activeWatchers = new Map<string, () => void>();
+    const watchersStopped: string[] = [];
+
+    sessionIndex.set('alive-1', { id: 'alive-1' });
+    sessionIndex.set('alive-2', { id: 'alive-2' });
+    sessionIndex.set('deleted-1', { id: 'deleted-1' });
+    sessionIndex.set('deleted-2', { id: 'deleted-2' });
+    activeWatchers.set('deleted-1', () => watchersStopped.push('deleted-1'));
+    // deleted-2 has no watcher — eviction must not throw.
+
+    const fresh = [{ id: 'alive-1' }, { id: 'alive-2' }];
+
+    // Replicates the loop in handlers.ts (post-eviction).
+    const freshIds = new Set(fresh.map(s => s.id));
+    for (const cachedId of [...sessionIndex.keys()]) {
+      if (!freshIds.has(cachedId)) {
+        sessionIndex.delete(cachedId);
+        trackerForgotten.push(cachedId);
+        const stop = activeWatchers.get(cachedId);
+        if (stop) { stop(); activeWatchers.delete(cachedId); }
+      }
+    }
+
+    expect([...sessionIndex.keys()].sort()).toEqual(['alive-1', 'alive-2']);
+    expect(trackerForgotten.sort()).toEqual(['deleted-1', 'deleted-2']);
+    expect(watchersStopped).toEqual(['deleted-1']);
+    expect(activeWatchers.has('deleted-1')).toBe(false);
+  });
+
+  it('is a no-op when fresh results match the cache exactly', () => {
+    const sessionIndex = new Map<string, { id: string }>();
+    sessionIndex.set('a', { id: 'a' });
+    sessionIndex.set('b', { id: 'b' });
+    const fresh = [{ id: 'a' }, { id: 'b' }];
+
+    const freshIds = new Set(fresh.map(s => s.id));
+    let evicted = 0;
+    for (const cachedId of [...sessionIndex.keys()]) {
+      if (!freshIds.has(cachedId)) { sessionIndex.delete(cachedId); evicted++; }
+    }
+    expect(evicted).toBe(0);
+    expect(sessionIndex.size).toBe(2);
+  });
+});

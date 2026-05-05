@@ -43,6 +43,7 @@ import { DEFAULT_SETTINGS } from '../../src/shared/ipc-contract';
 
 beforeEach(() => {
   globalThis.__settingsBacking = { settings: structuredClone(DEFAULT_SETTINGS) };
+  settingsStore.__resetForTests();
 });
 
 describe('settingsStore.update', () => {
@@ -100,15 +101,31 @@ describe('settingsStore.update', () => {
     ]);
   });
 
-  it('updates notifications partially, preserving unset fields', () => {
+  it('updates notifications.mode when given a valid value', () => {
+    const next = settingsStore.update({ notifications: { mode: 'off' } });
+    expect(next.notifications.mode).toBe('off');
+  });
+
+  it('accepts blocked-and-finished mode', () => {
+    const next = settingsStore.update({ notifications: { mode: 'blocked-and-finished' } });
+    expect(next.notifications.mode).toBe('blocked-and-finished');
+  });
+
+  it('rejects invalid notification mode value, keeping current', () => {
+    const next = settingsStore.update({ notifications: { mode: 'every-second' } });
+    expect(next.notifications.mode).toBe(DEFAULT_SETTINGS.notifications.mode);
+  });
+
+  it('drops v0.1 notification keys (onIdle, onError, ...) and accepts mode in the same patch', () => {
+    // This is the audit-required test: send a payload that mixes v0.1
+    // keys with the new v0.2 shape and verify the result has only `mode`.
     const next = settingsStore.update({
-      notifications: { onIdle: false, idleThresholdSeconds: 600 },
-    });
-    expect(next.notifications.onIdle).toBe(false);
-    expect(next.notifications.idleThresholdSeconds).toBe(600);
-    // Unset fields fall through to current values.
-    expect(next.notifications.onError).toBe(DEFAULT_SETTINGS.notifications.onError);
-    expect(next.notifications.onComplete).toBe(DEFAULT_SETTINGS.notifications.onComplete);
+      notifications: { onIdle: true, onError: false, idleThresholdSeconds: 120, mode: 'off' },
+    } as unknown);
+    expect(next.notifications).toEqual({ mode: 'off' });
+    // Defense in depth: the v0.1 fields must not have leaked through.
+    expect((next.notifications as unknown as Record<string, unknown>)['onIdle']).toBeUndefined();
+    expect((next.notifications as unknown as Record<string, unknown>)['idleThresholdSeconds']).toBeUndefined();
   });
 
   it('throws TypeError on null payload', () => {
@@ -125,5 +142,50 @@ describe('settingsStore.update', () => {
 
   it('throws TypeError on number payload', () => {
     expect(() => settingsStore.update(42)).toThrow(TypeError);
+  });
+});
+
+describe('settingsStore.get — v0.1 → v0.2 notifications migration', () => {
+  it('migrates a v0.1 notifications shape to { mode: "blocked-only" }', () => {
+    // Seed the backing store with the OLD shape (no `mode` key).
+    globalThis.__settingsBacking = {
+      settings: {
+        ...structuredClone(DEFAULT_SETTINGS),
+        notifications: {
+          onIdle: true,
+          onError: true,
+          onComplete: false,
+          idleThresholdSeconds: 600,
+          // no mode
+        },
+      },
+    };
+    settingsStore.__resetForTests();
+    const result = settingsStore.get();
+    expect(result.notifications).toEqual({ mode: 'blocked-only' });
+  });
+
+  it('preserves a valid v0.2 mode when already migrated', () => {
+    globalThis.__settingsBacking = {
+      settings: {
+        ...structuredClone(DEFAULT_SETTINGS),
+        notifications: { mode: 'blocked-and-finished' },
+      },
+    };
+    settingsStore.__resetForTests();
+    const result = settingsStore.get();
+    expect(result.notifications.mode).toBe('blocked-and-finished');
+  });
+
+  it('falls back to "blocked-only" if mode is invalid', () => {
+    globalThis.__settingsBacking = {
+      settings: {
+        ...structuredClone(DEFAULT_SETTINGS),
+        notifications: { mode: 'every-second' },
+      },
+    };
+    settingsStore.__resetForTests();
+    const result = settingsStore.get();
+    expect(result.notifications.mode).toBe('blocked-only');
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import {
   applyFilter,
@@ -8,6 +8,7 @@ import {
   type FilterId,
 } from '../stores/useSessionsStore';
 import { SessionCard } from '../components/SessionCard';
+import { CostRollup } from '../components/CostRollup';
 import { AdapterMark } from '../components/atoms';
 import { fmtCost, fmtTokens } from '../lib/format';
 import type { AdapterId } from '@shared/types';
@@ -24,7 +25,23 @@ export function SessionsView() {
   const select = useSessionsStore(s => s.select);
   const setView = useSessionsStore(s => s.setView);
   const openTab = useSessionsStore(s => s.openTab);
+  const load = useSessionsStore(s => s.load);
   const loaded = useSessionsStore(s => s.loaded);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function handleRefresh() {
+    if (!window.helm || refreshing) return;
+    setRefreshing(true);
+    try {
+      // Manual refresh bypasses the focus-rescan throttle by going straight
+      // through the IPC. discovery:rescan re-runs the probes; load() then
+      // pulls the fresh session list.
+      await window.helm.invoke('discovery:rescan');
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   const filtered = useMemo(() => applyFilter(sessions, filter, query), [sessions, filter, query]);
   const summary = useMemo(() => summarise(sessions), [sessions]);
@@ -58,6 +75,7 @@ export function SessionsView() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      <CostRollup sessions={sessions} />
       <SummaryStrip summary={summary} />
 
       <div className="flex shrink-0 items-center gap-2 border-b border-rule px-4 py-2">
@@ -67,6 +85,20 @@ export function SessionsView() {
           ))}
         </div>
         <div className="flex-1" />
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          title="Re-scan for new sessions"
+          className={clsx(
+            'inline-flex h-7 items-center gap-1 rounded-sm border border-rule px-2 font-mono text-2xs tracking-caps',
+            refreshing
+              ? 'text-fg-4 cursor-wait'
+              : 'text-fg-3 hover:text-fg hover:border-rule-2',
+          )}
+        >
+          <span className={clsx('inline-block', refreshing && 'animate-spin')}>↻</span>
+          <span>{refreshing ? 'SCANNING' : 'REFRESH'}</span>
+        </button>
         <div className="relative">
           <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 font-mono text-xs text-fg-4">⌕</span>
           <input

@@ -12,7 +12,8 @@
  */
 
 import Store from 'electron-store';
-import { DEFAULT_SETTINGS, type AppSettings } from '../../shared/ipc-contract';
+import log from 'electron-log';
+import { DEFAULT_SETTINGS, type AppSettings, type NotificationMode } from '../../shared/ipc-contract';
 
 const store = new Store<{ settings: AppSettings }>({
   defaults: { settings: DEFAULT_SETTINGS },
@@ -22,10 +23,56 @@ const ALLOWED_KEYS = new Set<keyof AppSettings>([
   'theme', 'enabledAdapters', 'customPaths', 'notifications',
 ]);
 const VALID_THEMES = new Set<AppSettings['theme']>(['light', 'dark', 'system']);
+const VALID_NOTIFICATION_MODES = new Set<NotificationMode>(['off', 'blocked-only', 'blocked-and-finished']);
+
+/**
+ * v0.1 → v0.2 migration for the notifications shape.
+ *
+ * v0.1 stored { onIdle, onError, onComplete, idleThresholdSeconds }, all
+ * unwired (audit #7). We don't try to preserve user intent — there was
+ * no real intent — and just default everyone to 'blocked-only'. Users
+ * with a v0.2 shape already persisted are passed through.
+ */
+function migrateNotifications(persisted: unknown): { mode: NotificationMode } {
+  if (
+    persisted !== null
+    && typeof persisted === 'object'
+    && 'mode' in persisted
+    && typeof (persisted as { mode: unknown }).mode === 'string'
+    && VALID_NOTIFICATION_MODES.has((persisted as { mode: string }).mode as NotificationMode)
+  ) {
+    return { mode: (persisted as { mode: NotificationMode }).mode };
+  }
+  return { mode: 'blocked-only' };
+}
+
+let migrated = false;
 
 export const settingsStore = {
   get(): AppSettings {
-    return store.get('settings');
+    const raw = store.get('settings');
+    // Lazy one-shot migration on first read after launch. Runs against
+    // the resolved electron-store, not at module top-level (which would
+    // execute before the app's userData path is set).
+    if (!migrated) {
+      migrated = true;
+      const beforeMode = (raw.notifications as unknown as { mode?: unknown })?.mode;
+      const normalized: AppSettings = {
+        ...raw,
+        notifications: migrateNotifications(raw.notifications),
+      };
+      if (beforeMode !== normalized.notifications.mode) {
+        log.debug('[settings] migrated notifications shape to v0.2', { mode: normalized.notifications.mode });
+        store.set('settings', normalized);
+      }
+      return normalized;
+    }
+    return raw;
+  },
+
+  /** Test-only — reset the one-shot migration flag between runs. */
+  __resetForTests(): void {
+    migrated = false;
   },
 
   update(patch: unknown): AppSettings {
@@ -71,17 +118,16 @@ export const settingsStore = {
           break;
         }
         case 'notifications': {
+          // v0.2 shape: { mode: NotificationMode }. Unknown keys (incl.
+          // v0.1's onIdle/onError/onComplete/idleThresholdSeconds) are
+          // dropped silently — same forward-compat policy as the
+          // top-level allowed-keys filter.
           if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
             const n = value as Record<string, unknown>;
-            next.notifications = {
-              onIdle: typeof n['onIdle'] === 'boolean' ? n['onIdle'] : current.notifications.onIdle,
-              onError: typeof n['onError'] === 'boolean' ? n['onError'] : current.notifications.onError,
-              onComplete: typeof n['onComplete'] === 'boolean' ? n['onComplete'] : current.notifications.onComplete,
-              idleThresholdSeconds:
-                typeof n['idleThresholdSeconds'] === 'number' && n['idleThresholdSeconds'] >= 0
-                  ? n['idleThresholdSeconds']
-                  : current.notifications.idleThresholdSeconds,
-            };
+            const mode = typeof n['mode'] === 'string' && VALID_NOTIFICATION_MODES.has(n['mode'] as NotificationMode)
+              ? (n['mode'] as NotificationMode)
+              : current.notifications.mode;
+            next.notifications = { mode };
           }
           break;
         }

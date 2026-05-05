@@ -120,6 +120,13 @@ describe('computeState — Claude processing grace (no flickering)', () => {
     expect(s.kind).toBe('awaiting-user');
   });
 
+  it('"[Request interrupted by user]" as last event → awaiting-user immediately', () => {
+    const interrupted: Message = { kind: 'user-prompt', uuid: 'int-1', ts: tsAt(5_000), text: '[Request interrupted by user]', ideContext: [] };
+    const messages: Message[] = [userPrompt(60_000), interrupted];
+    const s = computeState({ messages, lastEventAt: NOW - 5_000, permissionMode: 'default', now: NOW });
+    expect(s.kind).toBe('awaiting-user');
+  });
+
   it('tool-result as last event, 10s ago → working (Claude is processing the result)', () => {
     const messages: Message[] = [
       userPrompt(60_000),

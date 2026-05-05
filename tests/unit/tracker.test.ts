@@ -153,7 +153,7 @@ describe('StateTracker — listener', () => {
   it('fires the listener with the new state and lastUserInputAt when state changes', () => {
     const t = new StateTracker();
     const fired: Array<{ id: string; lastUserInputAt: number | null; kind: string }> = [];
-    t.setListener((id, payload) => {
+    t.addListener((id, payload) => {
       fired.push({ id, lastUserInputAt: payload.lastUserInputAt, kind: payload.state.kind });
     });
 

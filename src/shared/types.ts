@@ -78,6 +78,19 @@ export type Message =
   | { kind: 'session-result'; uuid: string; ts: string; costUsd: number }
   | { kind: 'unknown'; uuid: string; ts: string; raw: unknown };
 
+/**
+ * Discriminated reason codes — let the renderer branch on the *kind* of
+ * failure rather than parsing strings. The empty-projects-dir case
+ * deliberately stays in the `ok: true, sessionCount: 0` arm: that's a
+ * "tool installed, nothing to show yet" UX, not a failure.
+ */
+export type ValidationFailure =
+  | 'not-found'         // path or required subdir doesn't exist
+  | 'no-projects-dir'   // root exists but the adapter-required subdir doesn't
+  | 'no-sessions-yet'   // currently unused for Claude Code; reserved for adapters whose top-level has its own concept of "no work yet"
+  | 'permission-denied' // EACCES while statting / reading
+  | 'unknown';          // anything else (logged at the call site)
+
 export type ValidationResult =
   | { ok: true; sessionCount: number }
-  | { ok: false; reason: string };
+  | { ok: false; reason: ValidationFailure };

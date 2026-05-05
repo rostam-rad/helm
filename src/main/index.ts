@@ -8,7 +8,10 @@
 import { app, BrowserWindow, shell } from 'electron';
 import * as path from 'node:path';
 import log from 'electron-log';
-import { registerIpcHandlers } from './ipc/handlers';
+import { registerIpcHandlers, getSessionMeta, getTracker } from './ipc/handlers';
+import { runDiscoveryAndPushIfChanged } from './discovery/focus-rescan';
+import { installNotifications } from './notifications';
+import { settingsStore } from './store/settings';
 
 log.transports.file.level = 'info';
 log.transports.console.level = 'debug';
@@ -70,11 +73,37 @@ function createWindow(): void {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   }
 
+  // Focus-driven re-discovery (PRD §6.1.5, audit #6). When the user comes
+  // back to Helm, re-scan and push discovery:changed if anything moved.
+  // The helper throttles to one rescan per 5s so rapid Cmd-Tab cycles
+  // don't hammer the filesystem.
+  mainWindow.on('focus', () => {
+    void runDiscoveryAndPushIfChanged(() => mainWindow);
+  });
+
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
+// Windows: notifications need an explicit App User Model ID to display
+// the correct app name and persist in Action Center. Match the appId in
+// package.json. Harmless on macOS / Linux.
+app.setAppUserModelId('dev.helm.app');
+
 app.whenReady().then(() => {
   registerIpcHandlers(() => mainWindow);
+
+  // Native OS notifications (PRD §6.7, audit #7). Subscribes to the
+  // tracker after handlers are registered. getSettings is a function
+  // (not a snapshot) so a mid-flight mode change takes effect on the
+  // next transition without restart.
+  installNotifications({
+    tracker: getTracker(),
+    getWindow: () => mainWindow,
+    getSettings: () => settingsStore.get(),
+    getMeta: getSessionMeta,
+    getMessages: (id) => getTracker().getMessages(id),
+  });
+
   createWindow();
 
   app.on('activate', () => {

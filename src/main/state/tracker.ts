@@ -40,33 +40,51 @@ export interface SeedArgs {
 
 export class StateTracker {
   private entries = new Map<string, SessionEntry>();
-  private listener: ChangeListener | null = null;
+  private listeners = new Set<ChangeListener>();
   private tick: ReturnType<typeof setInterval> | null = null;
 
-  setListener(fn: ChangeListener | null): void {
-    this.listener = fn;
+  /** Register a change listener. Returns an unsubscribe function. Multiple
+   *  subscribers are supported (IPC push + notifications, future analytics).
+   *  Listeners are called in registration order; one throwing doesn't
+   *  prevent others from running. */
+  addListener(fn: ChangeListener): () => void {
+    this.listeners.add(fn);
+    return () => { this.listeners.delete(fn); };
   }
 
-  /** Replace the cached state for a session — used on initial load. */
+  /** Replace the cached state for a session — used on initial load and
+   *  re-seeds from file tail. Fires listeners when the state changes so
+   *  that re-seeds triggered by metaWatcher produce notifications. */
   seed(sessionId: string, args: SeedArgs): TrackerPayload {
-    // If we're seeding fresh and no permissionMode was passed, derive it from
-    // the most recent user-prompt that carried one.
+    const prevEntry = this.entries.get(sessionId);
     const sniffedPermission = args.permissionMode ?? sniffPermissionMode(args.messages);
     const sniffedLastUser = args.lastUserInputAt ?? sniffLastUserInputAt(args.messages);
+    const nextState = computeState({
+      messages: args.messages,
+      lastEventAt: args.lastEventAt,
+      permissionMode: sniffedPermission,
+      now: Date.now(),
+    });
     const entry: SessionEntry = {
       messages: args.messages,
       lastEventAt: args.lastEventAt,
       permissionMode: sniffedPermission,
       lastUserInputAt: sniffedLastUser,
-      state: computeState({
-        messages: args.messages,
-        lastEventAt: args.lastEventAt,
-        permissionMode: sniffedPermission,
-        now: Date.now(),
-      }),
+      state: nextState,
     };
     this.entries.set(sessionId, entry);
     this.startTickIfNeeded();
+
+    // Emit listeners on re-seed state changes so notifications fire even
+    // when state transitions come through the metaWatcher (tail re-seed)
+    // path rather than incremental ingest.
+    if (prevEntry && !statesEqual(prevEntry.state, nextState)) {
+      const payload = { state: nextState, lastUserInputAt: entry.lastUserInputAt };
+      for (const listener of this.listeners) {
+        try { listener(sessionId, payload); } catch { /* one bad listener mustn't break the others */ }
+      }
+    }
+
     return { state: entry.state, lastUserInputAt: entry.lastUserInputAt };
   }
 
@@ -113,6 +131,13 @@ export class StateTracker {
     return this.entries.get(sessionId)?.permissionMode;
   }
 
+  /** Read-only view of the cached message tail for a session. Used by
+   *  the notifications module to source the body of "turn finished"
+   *  pings (last assistant-text text). Returns undefined for unknown ids. */
+  getMessages(sessionId: string): readonly Message[] | undefined {
+    return this.entries.get(sessionId)?.messages;
+  }
+
   private recompute(sessionId: string): void {
     const entry = this.entries.get(sessionId);
     if (!entry) return;
@@ -125,7 +150,10 @@ export class StateTracker {
     const stateChanged = !statesEqual(entry.state, next);
     entry.state = next;
     if (stateChanged) {
-      this.listener?.(sessionId, { state: next, lastUserInputAt: entry.lastUserInputAt });
+      const payload = { state: next, lastUserInputAt: entry.lastUserInputAt };
+      for (const listener of this.listeners) {
+        try { listener(sessionId, payload); } catch { /* one bad listener mustn't break the others */ }
+      }
     }
   }
 

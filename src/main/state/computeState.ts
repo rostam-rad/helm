@@ -91,10 +91,10 @@ const RECENT_MS = 60 * 60 * 1000;
  *  reply, we want awaiting-user to show eventually. The 90s WORKING_RECENT_MS
  *  is the buffer that bridges normal gaps between assistant events without
  *  delaying the awaiting transition forever. */
-function isProcessingTrigger(kind: Message['kind']): boolean {
-  return kind === 'user-prompt'
-      || kind === 'tool-result'
-      || kind === 'assistant-thinking';
+function isProcessingTrigger(msg: Message): boolean {
+  return msg.kind === 'user-prompt'
+      || msg.kind === 'tool-result'
+      || msg.kind === 'assistant-thinking';
 }
 
 interface UnansweredToolUse {
@@ -190,13 +190,20 @@ export function computeState(inputs: ComputeStateInputs): SessionState {
     };
   }
 
+  // User interrupted the agent mid-turn. Claude Code writes this literal string
+  // as a user event. Flip to awaiting-user immediately — skip all grace windows.
+  if (lastMsg?.kind === 'user-prompt' && lastMsg.text === '[Request interrupted by user]') {
+    const elapsed = now - lastEventAt;
+    return { kind: 'awaiting-user', since: sinceQuiet, freshnessTier: freshnessTier(elapsed) };
+  }
+
   const elapsed = now - lastEventAt;
 
   // Claude is mid-task: the last event implies more output is coming
   // (user just sent a prompt, a tool just returned, or Claude is mid-thinking).
   // Long crash-grace window so we don't flicker to awaiting during normal
   // API latency between events.
-  if (lastMsg && isProcessingTrigger(lastMsg.kind)) {
+  if (lastMsg && isProcessingTrigger(lastMsg)) {
     const lastMs = Date.parse(lastMsg.ts);
     if (Number.isFinite(lastMs) && now - lastMs < PROCESSING_GRACE_MS) {
       return { kind: 'working', since: sinceQuiet };

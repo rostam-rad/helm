@@ -26,22 +26,33 @@ export const claudeCodeAdapter: AgentAdapter = {
   },
 
   async validatePath(p: string): Promise<ValidationResult> {
+    // Map Node fs errors to the discriminated ValidationFailure codes the
+    // renderer branches on. EACCES (permission denied) is the one we
+    // surface specifically — anything else collapses to 'not-found' or
+    // 'unknown'. The empty-projects case stays in the ok-arm with
+    // sessionCount === 0; the renderer treats that as "tool installed,
+    // nothing to show yet" rather than a failure.
     try {
       const stat = await fs.stat(p);
-      if (!stat.isDirectory()) return { ok: false, reason: 'Not a directory' };
-    } catch {
-      return { ok: false, reason: 'Path does not exist' };
+      if (!stat.isDirectory()) return { ok: false, reason: 'unknown' };
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException | undefined)?.code;
+      if (code === 'EACCES' || code === 'EPERM') return { ok: false, reason: 'permission-denied' };
+      return { ok: false, reason: 'not-found' };
     }
 
     const projectsDir = path.join(p, 'projects');
     try {
       const stat = await fs.stat(projectsDir);
-      if (!stat.isDirectory()) return { ok: false, reason: 'No projects/ subdirectory' };
-    } catch {
-      return { ok: false, reason: 'No projects/ subdirectory' };
+      if (!stat.isDirectory()) return { ok: false, reason: 'no-projects-dir' };
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException | undefined)?.code;
+      if (code === 'EACCES' || code === 'EPERM') return { ok: false, reason: 'permission-denied' };
+      return { ok: false, reason: 'no-projects-dir' };
     }
 
-    // Count sessions cheaply.
+    // Count sessions cheaply. An empty result is the "no-sessions-yet"
+    // signal handled by the renderer.
     const sessions = await listClaudeCodeSessions(p);
     return { ok: true, sessionCount: sessions.length };
   },

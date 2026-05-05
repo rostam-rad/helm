@@ -16,10 +16,34 @@ export function DiscoveryView() {
   const found = rows.filter(r => r.status === 'found');
   const totalSessions = rows.reduce((sum, r) => sum + r.sessionCount, 0);
 
+  // Granular discovery branching (audit #13). Order matters — first
+  // matching condition wins:
+  //   1. Permission-denied somewhere → most actionable failure
+  //   2. Found, but zero sessions → "tool installed, no sessions yet"
+  //   3. Sessions found → happy path
+  //   4. Nothing matched → original "no agents found" copy
+  const permissionDeniedRow = rows.find(r => r.reason === 'permission-denied');
+  const installedButEmpty = found.length > 0 && totalSessions === 0;
+
   const headerCopy =
-    scanning ? { title: 'Looking for your coding agents', sub: 'Helm checks env vars, standard paths, and XDG conventions. Nothing leaves your machine.' } :
-    found.length > 0 ? { title: `Found ${found.length} ${found.length === 1 ? 'agent' : 'agents'} on this machine`, sub: `${totalSessions} session${totalSessions === 1 ? '' : 's'} discovered locally. Nothing leaves your machine.` } :
-    { title: 'No supported coding agents found', sub: 'Helm searched common paths but didn\'t find any sessions. Add a custom path or skip to demo data.' };
+    scanning
+      ? { title: 'Looking for your coding agents', sub: 'Helm checks env vars, standard paths, and XDG conventions. Nothing leaves your machine.' }
+      : permissionDeniedRow
+        ? {
+            title: `Couldn't read ${permissionDeniedRow.displayName}'s data`,
+            sub: `We found ${permissionDeniedRow.paths[0] ?? permissionDeniedRow.displayName} but couldn't read it. Check the directory's permissions, then refresh.`,
+          }
+        : installedButEmpty
+          ? {
+              title: `${found[0]?.displayName ?? 'Your agent'} is installed, but no sessions yet`,
+              sub: `Found ${found[0]?.paths[0] ?? 'the data directory'}. Run a session in any project to see it here.`,
+            }
+          : found.length > 0
+            ? {
+                title: `Found ${found.length} ${found.length === 1 ? 'agent' : 'agents'} on this machine`,
+                sub: `${totalSessions} session${totalSessions === 1 ? '' : 's'} discovered locally. Nothing leaves your machine.`,
+              }
+            : { title: 'No supported coding agents found', sub: 'Helm searched common paths but didn\'t find any sessions. Add a custom path or skip to demo data.' };
 
   return (
     <div className="relative h-full overflow-hidden bg-bg-2">

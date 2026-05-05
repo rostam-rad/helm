@@ -64,6 +64,18 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     window.helm.on('discovery:changed', () => {
       void get().load();
     });
+
+    // A notification was clicked: focus the named session in the detail
+    // view. Idempotent — if the session is already open, this is a no-op
+    // visually beyond ensuring the right tab is active.
+    window.helm.on('notifications:focus-session', ({ sessionId }) => {
+      const state = get();
+      // Only navigate to sessions we know about; ignore stale clicks.
+      if (!state.sessions[sessionId]) return;
+      state.openTab(sessionId);
+      state.select(sessionId);
+      state.setView('detail');
+    });
   },
 
   select(id) { set({ selectedId: id }); },

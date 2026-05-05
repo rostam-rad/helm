@@ -32,17 +32,24 @@ export interface IpcEvent {
   'sessions:event':       { sessionId: string; message: Message };
   'sessions:meta-changed': { meta: SessionMeta };
   'discovery:changed':    { sessionsAddedOrChanged: number };
+  /** User clicked a notification — focus the main window and route the
+   *  renderer to the named session's detail view. */
+  'notifications:focus-session': { sessionId: string };
 }
+
+export type NotificationMode = 'off' | 'blocked-only' | 'blocked-and-finished';
 
 export interface AppSettings {
   theme: 'light' | 'dark' | 'system';
   enabledAdapters: AdapterId[];
   customPaths: { adapter: AdapterId; path: string }[];
   notifications: {
-    onIdle: boolean;
-    onError: boolean;
-    onComplete: boolean;
-    idleThresholdSeconds: number;
+    /**
+     * Single radio choice (rather than independent booleans for blocked
+     * vs finished). 'blocked-only' is the default high-signal mode.
+     * See src/main/notifications/index.ts for the full rationale.
+     */
+    mode: NotificationMode;
   };
 }
 
@@ -50,10 +57,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   enabledAdapters: ['claude-code'],
   customPaths: [],
-  notifications: {
-    onIdle: true,
-    onError: true,
-    onComplete: true,
-    idleThresholdSeconds: 300,
-  },
+  notifications: { mode: 'blocked-only' },
 };

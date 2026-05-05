@@ -25,6 +25,16 @@ const activeWatchers = new Map<string, () => void>();
 const sessionIndex = new Map<string, SessionMeta>();
 const tracker = new StateTracker();
 
+// Lookup accessors for downstream subscribers (e.g. notifications) that
+// need to read the latest meta or the tracker's cached message tail
+// without taking a hard dep on the IPC handler internals.
+export function getSessionMeta(id: string): SessionMeta | undefined {
+  return sessionIndex.get(id);
+}
+export function getTracker(): StateTracker {
+  return tracker;
+}
+
 let metaWatcher: FSWatcher | null = null;
 
 function sendMetaChanged(getWindow: GetWindow, meta: SessionMeta): void {
@@ -153,7 +163,9 @@ function startMetaWatcher(sessions: SessionMeta[], getWindow: GetWindow): void {
 
 export function registerIpcHandlers(getWindow: GetWindow): void {
   // Wire the tracker so any state change pushes a fresh SessionMeta to the renderer.
-  tracker.setListener((sessionId, payload) => applyTrackerPayload(sessionId, payload, getWindow));
+  // addListener returns an unsubscribe; we hold it to allow future teardown
+  // (currently only invoked at process exit via Electron's lifecycle).
+  tracker.addListener((sessionId, payload) => applyTrackerPayload(sessionId, payload, getWindow));
 
   ipcMain.handle('discovery:rescan', async () => {
     const settings = settingsStore.get();
@@ -182,6 +194,22 @@ export function registerIpcHandlers(getWindow: GetWindow): void {
     }
 
     all.sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt));
+
+    // Eviction (audit #10). Sessions that no longer appear in fresh
+    // discovery (file deleted on disk, project removed) must be cleared
+    // from sessionIndex, the tracker, and any active live watcher —
+    // otherwise long-running Helm processes accumulate per-session
+    // memory and 1s tracker ticks for sessions that no longer exist.
+    const freshIds = new Set(all.map(s => s.id));
+    for (const cachedId of [...sessionIndex.keys()]) {
+      if (!freshIds.has(cachedId)) {
+        sessionIndex.delete(cachedId);
+        tracker.forget(cachedId);
+        const stop = activeWatchers.get(cachedId);
+        if (stop) { stop(); activeWatchers.delete(cachedId); }
+      }
+    }
+
     startMetaWatcher(all, getWindow);
 
     return all;
@@ -202,6 +230,11 @@ export function registerIpcHandlers(getWindow: GetWindow): void {
 
     // Compute accurate stats from the full message list and return an
     // enriched meta so the detail view shows real numbers immediately.
+    //
+    // For `model`: latest assistant-text wins. The original first-write-wins
+    // logic (the `!model` guard) misrepresented sessions where the user
+    // swapped models mid-conversation — the stats strip would keep showing
+    // the first model used even after a switch.
     let totalTokens = 0;
     let totalCostUsd = 0;
     let messageCount = 0;
@@ -210,7 +243,7 @@ export function registerIpcHandlers(getWindow: GetWindow): void {
       if (m.kind === 'assistant-usage') totalTokens += m.inputTokens + m.outputTokens;
       if (m.kind === 'session-result') totalCostUsd = m.costUsd;
       if (m.kind === 'user-prompt' || m.kind === 'assistant-text') messageCount++;
-      if (m.kind === 'assistant-text' && m.model && !model) model = m.model;
+      if (m.kind === 'assistant-text' && m.model) model = m.model;
     }
     // Re-seed the tracker with the full message list — gives the most accurate state
     // and lets the tracker sniff permissionMode + lastUserInputAt from real events.
