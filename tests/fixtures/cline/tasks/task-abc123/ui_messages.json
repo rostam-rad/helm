@@ -1,0 +1,27 @@
+[
+  {
+    "type": "say",
+    "say": "task",
+    "text": "Add a README to this project",
+    "ts": 1746360000000
+  },
+  {
+    "type": "say",
+    "say": "text",
+    "text": "I'll create a README for this project.",
+    "ts": 1746360005000
+  },
+  {
+    "type": "ask",
+    "ask": "tool",
+    "text": "{\"tool\":\"write_to_file\",\"path\":\"README.md\"}",
+    "ts": 1746360006000,
+    "autoApproved": true
+  },
+  {
+    "type": "say",
+    "say": "completion_result",
+    "text": "I've created the README.md file for your project.",
+    "ts": 1746360010000
+  }
+]

@@ -33,17 +33,15 @@ const VALID_NOTIFICATION_MODES = new Set<NotificationMode>(['off', 'blocked-only
  * no real intent — and just default everyone to 'blocked-only'. Users
  * with a v0.2 shape already persisted are passed through.
  */
-function migrateNotifications(persisted: unknown): { mode: NotificationMode } {
-  if (
-    persisted !== null
-    && typeof persisted === 'object'
-    && 'mode' in persisted
-    && typeof (persisted as { mode: unknown }).mode === 'string'
-    && VALID_NOTIFICATION_MODES.has((persisted as { mode: string }).mode as NotificationMode)
-  ) {
-    return { mode: (persisted as { mode: NotificationMode }).mode };
-  }
-  return { mode: 'blocked-only' };
+function migrateNotifications(persisted: unknown): { mode: NotificationMode; checkForUpdates: boolean } {
+  const defaultResult = { mode: 'blocked-only' as NotificationMode, checkForUpdates: true };
+  if (persisted === null || typeof persisted !== 'object') return defaultResult;
+  const p = persisted as Record<string, unknown>;
+  const mode = typeof p['mode'] === 'string' && VALID_NOTIFICATION_MODES.has(p['mode'] as NotificationMode)
+    ? (p['mode'] as NotificationMode)
+    : 'blocked-only';
+  const checkForUpdates = typeof p['checkForUpdates'] === 'boolean' ? p['checkForUpdates'] : true;
+  return { mode, checkForUpdates };
 }
 
 let migrated = false;
@@ -118,16 +116,18 @@ export const settingsStore = {
           break;
         }
         case 'notifications': {
-          // v0.2 shape: { mode: NotificationMode }. Unknown keys (incl.
-          // v0.1's onIdle/onError/onComplete/idleThresholdSeconds) are
-          // dropped silently — same forward-compat policy as the
-          // top-level allowed-keys filter.
+          // v0.2 shape: { mode: NotificationMode }.
+          // v0.3 adds checkForUpdates: boolean.
+          // Unknown keys dropped silently — forward-compat policy.
           if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
             const n = value as Record<string, unknown>;
             const mode = typeof n['mode'] === 'string' && VALID_NOTIFICATION_MODES.has(n['mode'] as NotificationMode)
               ? (n['mode'] as NotificationMode)
               : current.notifications.mode;
-            next.notifications = { mode };
+            const checkForUpdates = typeof n['checkForUpdates'] === 'boolean'
+              ? n['checkForUpdates']
+              : current.notifications.checkForUpdates;
+            next.notifications = { mode, checkForUpdates };
           }
           break;
         }

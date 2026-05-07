@@ -4,6 +4,15 @@ import { useSessionsStore, listSessions, type ViewName } from '../stores/useSess
 import type { SessionMeta } from '@shared/types';
 import { fmtRelative } from '../lib/format';
 
+function GearIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+      <path d="M8 10.5A2.5 2.5 0 1 1 8 5.5a2.5 2.5 0 0 1 0 5Zm0-1.5A1 1 0 1 0 8 7a1 1 0 0 0 0 2Z"/>
+      <path d="M6.14 1.5a.5.5 0 0 1 .486-.38h2.748a.5.5 0 0 1 .486.38l.3 1.198a5.52 5.52 0 0 1 1.054.609l1.174-.392a.5.5 0 0 1 .596.23l1.374 2.38a.5.5 0 0 1-.1.625l-.924.8a5.567 5.567 0 0 1 0 1.216l.924.8a.5.5 0 0 1 .1.624l-1.374 2.38a.5.5 0 0 1-.596.23l-1.174-.391a5.52 5.52 0 0 1-1.054.608l-.3 1.198a.5.5 0 0 1-.486.38H6.626a.5.5 0 0 1-.486-.38l-.3-1.198a5.52 5.52 0 0 1-1.054-.608l-1.174.391a.5.5 0 0 1-.596-.23L1.642 10.17a.5.5 0 0 1 .1-.625l.924-.8a5.567 5.567 0 0 1 0-1.216l-.924-.8a.5.5 0 0 1-.1-.624l1.374-2.38a.5.5 0 0 1 .596-.23l1.174.392A5.52 5.52 0 0 1 5.84 3.21L6.14 1.5Zm.884 1.12-.27 1.08a.5.5 0 0 1-.358.356 4.52 4.52 0 0 0-1.32.762.5.5 0 0 1-.504.082l-1.054-.352-1.06 1.834.83.719a.5.5 0 0 1 .162.46 4.567 4.567 0 0 0 0 1.518.5.5 0 0 1-.163.46l-.829.72 1.06 1.833 1.054-.351a.5.5 0 0 1 .504.081 4.52 4.52 0 0 0 1.32.762.5.5 0 0 1 .358.357l.27 1.08h2.12l.27-1.08a.5.5 0 0 1 .358-.357 4.52 4.52 0 0 0 1.32-.762.5.5 0 0 1 .504-.08l1.054.35 1.06-1.833-.83-.72a.5.5 0 0 1-.162-.46 4.567 4.567 0 0 0 0-1.517.5.5 0 0 1 .163-.461l.829-.719-1.06-1.834-1.054.352a.5.5 0 0 1-.504-.082 4.52 4.52 0 0 0-1.32-.762.5.5 0 0 1-.358-.356l-.27-1.08H7.024Z"/>
+    </svg>
+  );
+}
+
 interface Props {
   children: React.ReactNode;
 }
@@ -93,7 +102,7 @@ interface TabStripProps {
 }
 
 function TabStrip({ view, onChange, sessionCount, liveCount, lastSyncAt }: TabStripProps) {
-  const tabs: { id: ViewName; label: string; suffix?: string }[] = [
+  const navTabs: { id: ViewName; label: string; suffix?: string }[] = [
     { id: 'discovery', label: 'Discovery' },
     { id: 'sessions',  label: 'Sessions', suffix: String(sessionCount) },
   ];
@@ -101,7 +110,7 @@ function TabStrip({ view, onChange, sessionCount, liveCount, lastSyncAt }: TabSt
   return (
     <div className="flex h-10 shrink-0 items-stretch border-b border-rule bg-bg-2 px-2">
       <div className="flex items-stretch gap-0">
-        {tabs.map(t => (
+        {navTabs.map(t => (
           <button
             key={t.id}
             onClick={() => onChange(t.id)}
@@ -130,6 +139,16 @@ function TabStrip({ view, onChange, sessionCount, liveCount, lastSyncAt }: TabSt
           style={{ width: 7, height: 7 }}
         />
       </div>
+      <button
+        onClick={() => onChange('settings')}
+        title="Settings"
+        className={clsx(
+          'ml-1 inline-flex items-center px-2 transition-colors',
+          view === 'settings' ? 'text-accent' : 'text-fg-4 hover:text-fg',
+        )}
+      >
+        <GearIcon />
+      </button>
     </div>
   );
 }

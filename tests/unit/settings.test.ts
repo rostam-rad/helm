@@ -122,7 +122,8 @@ describe('settingsStore.update', () => {
     const next = settingsStore.update({
       notifications: { onIdle: true, onError: false, idleThresholdSeconds: 120, mode: 'off' },
     } as unknown);
-    expect(next.notifications).toEqual({ mode: 'off' });
+    expect(next.notifications.mode).toBe('off');
+    expect('onIdle' in next.notifications).toBe(false);
     // Defense in depth: the v0.1 fields must not have leaked through.
     expect((next.notifications as unknown as Record<string, unknown>)['onIdle']).toBeUndefined();
     expect((next.notifications as unknown as Record<string, unknown>)['idleThresholdSeconds']).toBeUndefined();
@@ -162,7 +163,8 @@ describe('settingsStore.get — v0.1 → v0.2 notifications migration', () => {
     };
     settingsStore.__resetForTests();
     const result = settingsStore.get();
-    expect(result.notifications).toEqual({ mode: 'blocked-only' });
+    expect(result.notifications.mode).toBe('blocked-only');
+    expect(result.notifications.checkForUpdates).toBe(true);
   });
 
   it('preserves a valid v0.2 mode when already migrated', () => {

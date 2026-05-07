@@ -8,6 +8,7 @@
 import { app, BrowserWindow, shell } from 'electron';
 import * as path from 'node:path';
 import log from 'electron-log';
+import { autoUpdater } from 'electron-updater';
 import { registerIpcHandlers, getSessionMeta, getTracker } from './ipc/handlers';
 import { runDiscoveryAndPushIfChanged } from './discovery/focus-rescan';
 import { installNotifications } from './notifications';
@@ -92,10 +93,6 @@ app.setAppUserModelId('dev.helm.app');
 app.whenReady().then(() => {
   registerIpcHandlers(() => mainWindow);
 
-  // Native OS notifications (PRD §6.7, audit #7). Subscribes to the
-  // tracker after handlers are registered. getSettings is a function
-  // (not a snapshot) so a mid-flight mode change takes effect on the
-  // next transition without restart.
   installNotifications({
     tracker: getTracker(),
     getWindow: () => mainWindow,
@@ -103,6 +100,23 @@ app.whenReady().then(() => {
     getMeta: getSessionMeta,
     getMessages: (id) => getTracker().getMessages(id),
   });
+
+  // Auto-updater (v0.3). Checks GitHub Releases on launch and every 4h.
+  // Skipped in dev mode and when the user has opted out. Errors are logged
+  // but never crash the app — update delivery is best-effort.
+  // Note: v0.3 ships unsigned; Gatekeeper/SmartScreen will flag the update
+  // binary until code signing lands in v0.4.
+  if (app.isPackaged) {
+    autoUpdater.logger = log;
+    const checkForUpdates = () => {
+      if (!settingsStore.get().notifications.checkForUpdates) return;
+      try { autoUpdater.checkForUpdatesAndNotify(); } catch (err) {
+        log.warn('[updater] check failed', err);
+      }
+    };
+    checkForUpdates();
+    setInterval(checkForUpdates, 4 * 60 * 60 * 1000).unref();
+  }
 
   createWindow();
 

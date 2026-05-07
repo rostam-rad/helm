@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { SessionMeta, SessionState } from '@shared/types';
 
-export type ViewName = 'discovery' | 'sessions' | 'detail';
+export type ViewName = 'discovery' | 'sessions' | 'detail' | 'settings';
 export type FilterId = 'all' | 'active' | 'cloud' | 'local' | 'blocked';
 
 /** A session is "active" (in-flight or recently quiet but still warm) when

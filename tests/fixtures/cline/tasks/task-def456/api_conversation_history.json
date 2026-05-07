@@ -1,0 +1,32 @@
+[
+  {
+    "role": "user",
+    "content": [
+      {
+        "type": "text",
+        "text": "<task>\nFix the failing tests\n</task>"
+      }
+    ]
+  },
+  {
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "Let me look at the failing tests.",
+        "usage": {
+          "input_tokens": 256,
+          "output_tokens": 32
+        }
+      },
+      {
+        "type": "tool_use",
+        "id": "toolu_02B",
+        "name": "execute_command",
+        "input": {
+          "command": "npm test"
+        }
+      }
+    ]
+  }
+]

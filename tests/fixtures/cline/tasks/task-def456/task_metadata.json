@@ -1,0 +1,9 @@
+{
+  "id": "task-def456",
+  "ts": 1746363600000,
+  "task": "Fix the failing tests",
+  "dirAbsolutePath": "/Users/demo/my-project",
+  "api_provider": "anthropic",
+  "model_id": "claude-opus-4-5",
+  "totalCost": 0.0
+}

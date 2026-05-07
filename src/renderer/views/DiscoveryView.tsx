@@ -1,15 +1,54 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import { useDiscoveryStore, type ProbeRow } from '../stores/useDiscoveryStore';
 import { useSessionsStore } from '../stores/useSessionsStore';
+import { useSettingsStore } from '../stores/useSettingsStore';
 import { AdapterMark } from '../components/atoms';
 import { HelmAsciiBackground } from '../components/HelmAsciiBackground';
+import type { SpotlightResult } from '@shared/ipc-contract';
+import type { AdapterId } from '@shared/types';
 
 export function DiscoveryView() {
   const rows = useDiscoveryStore(s => s.rows);
   const scanning = useDiscoveryStore(s => s.scanning);
   const scan = useDiscoveryStore(s => s.scan);
   const setView = useSessionsStore(s => s.setView);
+  const { settings, update: updateSettings } = useSettingsStore();
+
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<SpotlightResult[]>([]);
+  const [searchDone, setSearchDone] = useState(false);
+
+  async function handleSearch() {
+    if (!window.helm) return;
+    setSearching(true);
+    setSearchDone(false);
+    setSearchResults([]);
+    try {
+      const results = await window.helm.invoke('discovery:search-filesystem');
+      setSearchResults(results);
+    } finally {
+      setSearching(false);
+      setSearchDone(true);
+    }
+  }
+
+  async function handleAddCustomPath() {
+    if (!window.helm) return;
+    const dir = await window.helm.invoke('dialog:open-directory');
+    if (!dir) return;
+    const current = settings?.customPaths ?? [];
+    await updateSettings({ customPaths: [...current, { adapter: 'claude-code' as AdapterId, path: dir }] });
+    void scan();
+  }
+
+  async function useSearchResult(result: SpotlightResult) {
+    if (!window.helm) return;
+    const current = settings?.customPaths ?? [];
+    if (current.some(p => p.path === result.path)) return;
+    await updateSettings({ customPaths: [...current, { adapter: result.adapter, path: result.path }] });
+    void scan();
+  }
 
   useEffect(() => { void scan(); }, [scan]);
 
@@ -78,8 +117,19 @@ export function DiscoveryView() {
 
             <div className="mt-5 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 text-xs">
-                <button className="text-accent hover:underline">Add a custom path…</button>
-                <button className="text-fg-3 hover:text-fg">Search my computer</button>
+                <button
+                  onClick={() => void handleAddCustomPath()}
+                  className="text-accent hover:underline"
+                >
+                  Add a custom path…
+                </button>
+                <button
+                  onClick={() => void handleSearch()}
+                  disabled={searching}
+                  className="text-fg-3 hover:text-fg disabled:opacity-50"
+                >
+                  {searching ? 'Searching…' : 'Search my computer'}
+                </button>
               </div>
               <div className="flex items-center gap-2">
                 {found.length === 0 && !scanning ? (
@@ -105,6 +155,40 @@ export function DiscoveryView() {
                 )}
               </div>
             </div>
+
+            {/* Spotlight search results */}
+            {searchDone && searchResults.length === 0 && (
+              <p className="mt-3 font-mono text-2xs tracking-caps text-fg-4">
+                No additional paths found on this machine.
+              </p>
+            )}
+            {searchResults.length > 0 && (
+              <div className="mt-3">
+                <p className="mb-2 font-mono text-2xs tracking-caps text-fg-4">
+                  Found {searchResults.length} path{searchResults.length > 1 ? 's' : ''} — click to add
+                </p>
+                <ul className="divide-y divide-rule rounded-sm border border-rule">
+                  {searchResults.map(r => (
+                    <li key={r.path} className="flex items-center gap-3 px-3 py-2">
+                      <AdapterMark adapterId={r.adapter} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-mono text-2xs text-fg">{r.path}</p>
+                        <p className="font-mono text-2xs tracking-caps text-fg-4">
+                          {r.adapter} · {r.confidence} confidence
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => void useSearchResult(r)}
+                        disabled={settings?.customPaths.some(p => p.path === r.path)}
+                        className="shrink-0 rounded border border-rule bg-bg-2 px-2 py-1 font-mono text-2xs tracking-caps text-fg hover:bg-bg-3 disabled:opacity-40 transition-colors"
+                      >
+                        {settings?.customPaths.some(p => p.path === r.path) ? '✓ Added' : 'Use this path'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           <p className="mt-4 font-mono text-2xs tracking-caps text-fg-4">

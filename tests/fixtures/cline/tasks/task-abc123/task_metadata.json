@@ -1,0 +1,9 @@
+{
+  "id": "task-abc123",
+  "ts": 1746360000000,
+  "task": "Add a README to this project",
+  "dirAbsolutePath": "/Users/demo/my-project",
+  "api_provider": "anthropic",
+  "model_id": "claude-sonnet-4-5",
+  "totalCost": 0.0012
+}

@@ -1,17 +1,22 @@
 import { useEffect } from 'react';
 import { useSessionsStore } from './stores/useSessionsStore';
+import { useSettingsStore } from './stores/useSettingsStore';
 import { WindowChrome } from './components/WindowChrome';
+import { NotificationPermissionBanner } from './components/NotificationPermissionBanner';
 import { SessionsView } from './views/SessionsView';
 import { SessionDetailView } from './views/SessionDetailView';
 import { DiscoveryView } from './views/DiscoveryView';
+import { SettingsView } from './views/SettingsView';
 
 export function App() {
   const view = useSessionsStore(s => s.view);
   const load = useSessionsStore(s => s.load);
   const setView = useSessionsStore(s => s.setView);
   const loaded = useSessionsStore(s => s.loaded);
+  const loadSettings = useSettingsStore(s => s.load);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void loadSettings(); }, [loadSettings]);
 
   // After the first list resolves, send empty installs to Discovery so
   // the user lands somewhere meaningful rather than an empty grid.
@@ -38,9 +43,11 @@ export function App() {
 
   return (
     <WindowChrome>
+      {(view === 'sessions' || view === 'detail') && <NotificationPermissionBanner />}
       {view === 'discovery' && <DiscoveryView />}
       {view === 'sessions'  && <SessionsView />}
       {view === 'detail'    && <SessionDetailView />}
+      {view === 'settings'  && <SettingsView />}
     </WindowChrome>
   );
 }

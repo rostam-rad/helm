@@ -7,8 +7,10 @@
  * adapters, the StateTracker, and the renderer over IPC.
  */
 
-import { ipcMain, type BrowserWindow } from 'electron';
+import { ipcMain, dialog, type BrowserWindow } from 'electron';
 import log from 'electron-log';
+import { getNotificationPermissionStatus, openSystemNotificationSettings } from '../notifications/permission';
+import { searchFilesystemForAgentData } from '../discovery/spotlight';
 import chokidar, { type FSWatcher } from 'chokidar';
 import { adapters, getAdapter } from '../adapters';
 import { runDiscovery } from '../discovery';
@@ -316,5 +318,38 @@ export function registerIpcHandlers(getWindow: GetWindow): void {
       displayName: a.displayName,
       enabled: settings.enabledAdapters.includes(a.id),
     }));
+  });
+
+  ipcMain.handle('notifications:permission-status', async () => {
+    return getNotificationPermissionStatus();
+  });
+
+  ipcMain.handle('notifications:open-system-settings', async () => {
+    openSystemNotificationSettings();
+  });
+
+  ipcMain.handle('dialog:open-directory', async () => {
+    const win = getWindow();
+    const result = await dialog.showOpenDialog(win ?? undefined as never, {
+      properties: ['openDirectory'],
+    });
+    return result.canceled ? null : (result.filePaths[0] ?? null);
+  });
+
+  let searchAbortController: AbortController | null = null;
+
+  ipcMain.handle('discovery:search-filesystem', async () => {
+    searchAbortController?.abort();
+    searchAbortController = new AbortController();
+    try {
+      return await searchFilesystemForAgentData(searchAbortController.signal);
+    } catch {
+      return [];
+    }
+  });
+
+  ipcMain.handle('discovery:abort-search', async () => {
+    searchAbortController?.abort();
+    searchAbortController = null;
   });
 }

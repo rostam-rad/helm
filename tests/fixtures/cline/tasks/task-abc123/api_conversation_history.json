@@ -1,0 +1,53 @@
+[
+  {
+    "role": "user",
+    "content": [
+      {
+        "type": "text",
+        "text": "<task>\nAdd a README to this project\n</task>"
+      }
+    ]
+  },
+  {
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "I'll create a README for this project."
+      },
+      {
+        "type": "tool_use",
+        "id": "toolu_01A",
+        "name": "write_to_file",
+        "input": {
+          "path": "README.md",
+          "content": "# My Project\n\nA sample project.",
+          "line_count": 3
+        }
+      }
+    ]
+  },
+  {
+    "role": "user",
+    "content": [
+      {
+        "type": "tool_result",
+        "tool_use_id": "toolu_01A",
+        "content": "The content was successfully saved to README.md."
+      }
+    ]
+  },
+  {
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "I've created the README.md file for your project.",
+        "usage": {
+          "input_tokens": 512,
+          "output_tokens": 64
+        }
+      }
+    ]
+  }
+]

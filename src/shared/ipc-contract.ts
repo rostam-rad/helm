@@ -25,6 +25,19 @@ export interface IpcRequest {
   // arrival rather than typechecked away from the boundary.
   'settings:set':     { req: unknown; res: AppSettings };
   'adapters:list':    { req: void; res: { id: AdapterId; displayName: string; enabled: boolean }[] };
+  'notifications:permission-status': { req: void; res: PermissionStatus };
+  'notifications:open-system-settings': { req: void; res: void };
+  'dialog:open-directory': { req: void; res: string | null };
+  'discovery:search-filesystem': { req: void; res: SpotlightResult[] };
+  'discovery:abort-search': { req: void; res: void };
+}
+
+export type PermissionStatus = 'granted' | 'denied' | 'unknown';
+
+export interface SpotlightResult {
+  path: string;
+  adapter: AdapterId;
+  confidence: 'high' | 'low';
 }
 
 // Push events — main pushes to renderer, no reply.
@@ -50,12 +63,14 @@ export interface AppSettings {
      * See src/main/notifications/index.ts for the full rationale.
      */
     mode: NotificationMode;
+    /** Check GitHub Releases for updates on launch and every 4 hours. */
+    checkForUpdates: boolean;
   };
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
-  enabledAdapters: ['claude-code'],
+  enabledAdapters: ['claude-code', 'cline'],
   customPaths: [],
-  notifications: { mode: 'blocked-only' },
+  notifications: { mode: 'blocked-only', checkForUpdates: true },
 };
